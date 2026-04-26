@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOMBA — Desarme Agora</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #ff2d2d;
+    --red-dim: #8b0000;
+    --red-glow: rgba(255,45,45,0.35);
+    --green: #00ff88;
+    --green-dim: #006633;
+    --green-glow: rgba(0,255,136,0.35);
+    --amber: #ffb800;
+    --panel: #0a0a0a;
+    --panel2: #111111;
+    --border: #222;
+    --text: #ccc;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Orbitron', sans-serif;
+  }
+
+  body {
+    background: #050505;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* scanlines overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* grid background */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,45,45,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,45,45,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ---- MAIN DEVICE ---- */
+  .device {
+    position: relative;
+    z-index: 10;
+    width: min(480px, 96vw);
+    background: var(--panel);
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 28px 28px 32px;
+    box-shadow:
+      0 0 0 1px #0f0f0f,
+      0 0 40px rgba(255,45,45,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  /* top bar */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .label-tag {
+    font-family: var(--display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--red);
+    text-transform: uppercase;
+  }
+
+  .status-leds {
+    display: flex;
+    gap: 8px;
+  }
+
+  .led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red-dim);
+  }
+
+  .led.active {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red-glow);
+    animation: led-blink 0.8s infinite;
+  }
+
+  .led.safe {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green-glow);
+    animation: none;
+  }
+
+  @keyframes led-blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* timer */
+  .timer-wrap {
+    background: #080808;
+    border: 1px solid #1c1c1c;
+    border-radius: 2px;
+    padding: 10px 14px 12px;
+    text-align: center;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .timer-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(255,45,45,0.03), transparent);
+    pointer-events: none;
+  }
+
+  .timer-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #444;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  #timer {
+    font-family: var(--display);
+    font-size: 64px;
+    font-weight: 900;
+    color: var(--red);
+    letter-spacing: 4px;
+    line-height: 1;
+    text-shadow: 0 0 20px var(--red-glow), 0 0 60px rgba(255,45,45,0.15);
+    transition: color 0.3s;
+  }
+
+  #timer.warning {
+    animation: timer-flash 0.4s infinite;
+  }
+
+  @keyframes timer-flash {
+    0%,100% { color: var(--red); text-shadow: 0 0 20px var(--red-glow); }
+    50% { color: #ff6060; text-shadow: 0 0 40px var(--red-glow); }
+  }
+
+  /* bomb SVG area */
+  .bomb-area {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+
+  #bomb-body {
+    transition: transform 0.1s;
+  }
+
+  /* progress dots */
+  .progress-track {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .pdot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #2a2a2a;
+    background: #0d0d0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: 10px;
+    color: #333;
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .pdot.done {
+    border-color: var(--green-dim);
+    background: rgba(0,255,136,0.08);
+    color: var(--green);
+    box-shadow: 0 0 8px var(--green-glow);
+  }
+
+  .pdot.active {
+    border-color: var(--red);
+    color: var(--red);
+    box-shadow: 0 0 8px var(--red-glow);
+    animation: dot-pulse 1s infinite;
+  }
+
+  @keyframes dot-pulse {
+    0%,100% { box-shadow: 0 0 8px var(--red-glow); }
+    50% { box-shadow: 0 0 16px var(--red-glow); }
+  }
+
+  /* hint */
+  .hint-line {
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #444;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .hint-line span {
+    color: var(--amber);
+  }
+
+  /* input panel */
+  .input-panel {
+    background: #080808;
+    border: 1px solid #1c1c1c;
+    border-radius: 2px;
+    padding: 16px;
+  }
+
+  #code-input {
+    width: 100%;
+    background: #050505;
+    border: 1px solid #2a2a2a;
+    border-radius: 2px;
+    color: var(--green);
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+    padding: 10px 14px;
+    letter-spacing: 4px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    caret-color: var(--green);
+  }
+
+  #code-input:focus {
+    border-color: #3a3a3a;
+    box-shadow: 0 0 0 1px rgba(0,255,136,0.1);
+  }
+
+  #code-input.error {
+    border-color: var(--red);
+    box-shadow: 0 0 8px var(--red-glow);
+    animation: shake 0.35s ease;
+    color: var(--red);
+  }
+
+  #code-input.ok {
+    border-color: var(--green);
+    box-shadow: 0 0 8px var(--green-glow);
+    color: var(--green);
+  }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-7px); }
+    80% { transform: translateX(7px); }
+  }
+
+  #confirm-btn {
+    margin-top: 12px;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    border-radius: 2px;
+    color: var(--red);
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #confirm-btn:hover {
+    border-color: var(--red);
+    background: rgba(255,45,45,0.06);
+    box-shadow: 0 0 12px var(--red-glow);
+  }
+
+  #confirm-btn:active {
+    transform: scale(0.98);
+  }
+
+  #status-msg {
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 2px;
+    min-height: 18px;
+    margin-top: 10px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  #attempts-msg {
+    text-align: center;
+    font-size: 10px;
+    color: #333;
+    letter-spacing: 1px;
+    margin-top: 6px;
+    min-height: 16px;
+  }
+
+  /* ---- END SCREENS ---- */
+  .end-screen {
+    display: none;
+    text-align: center;
+    padding: 10px 0;
+  }
+
+  .end-screen.show { display: block; }
+
+  .end-icon {
+    font-size: 52px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .end-title {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+
+  .end-title.boom { color: var(--red); text-shadow: 0 0 20px var(--red-glow); }
+  .end-title.safe { color: var(--green); text-shadow: 0 0 20px var(--green-glow); }
+
+  .end-sub {
+    font-size: 12px;
+    color: #444;
+    letter-spacing: 1px;
+    line-height: 1.8;
+    margin-bottom: 20px;
+  }
+
+  #restart-btn {
+    padding: 12px 32px;
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    border-radius: 2px;
+    color: #555;
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  #restart-btn:hover {
+    border-color: #555;
+    color: #999;
+  }
+
+  /* explosion effect */
+  @keyframes explosion {
+    0% { background: #050505; }
+    10% { background: #ff2d2d; }
+    20% { background: #050505; }
+    30% { background: #ff6000; }
+    40% { background: #050505; }
+    100% { background: #050505; }
+  }
+
+  body.exploding {
+    animation: explosion 0.8s ease forwards;
+  }
+
+  /* defused effect */
+  @keyframes defuse-glow {
+    0% { box-shadow: 0 0 40px rgba(255,45,45,0.08); }
+    100% { box-shadow: 0 0 60px rgba(0,255,136,0.25); }
+  }
+
+  .device.defused {
+    animation: defuse-glow 0.6s ease forwards;
+    border-color: var(--green-dim);
+  }
+</style>
+</head>
+<body>
+
+<div class="device" id="device">
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="label-tag">DISPOSITIVO ATIVO</div>
+    <div class="status-leds">
+      <div class="led active" id="led1"></div>
+      <div class="led active" id="led2"></div>
+      <div class="led active" id="led3"></div>
+    </div>
+  </div>
+
+  <!-- Main game -->
+  <div id="game-area">
+
+    <!-- Timer -->
+    <div class="timer-wrap">
+      <div class="timer-label">TEMPO RESTANTE</div>
+      <div id="timer">10:00</div>
+    </div>
+
+    <!-- Bomb visual -->
+    <div class="bomb-area">
+      <svg width="110" height="130" viewBox="0 0 110 130" id="bomb-svg">
+        <!-- fuse wire -->
+        <path d="M52 46 Q44 30 36 18 Q46 26 56 30 Q66 26 74 18 Q64 30 58 46" fill="#8B6914" />
+        <!-- fuse tip spark -->
+        <circle id="fuse-spark" cx="46" cy="19" r="5" fill="#FFB800">
+          <animate attributeName="r" values="4;7;4" dur="0.45s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="1;0.3;1" dur="0.45s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="46" cy="19" r="9" fill="#FFB800" opacity="0.12">
+          <animate attributeName="r" values="8;13;8" dur="0.45s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.12;0.03;0.12" dur="0.45s" repeatCount="indefinite"/>
+        </circle>
+        <!-- bomb body -->
+        <ellipse id="bomb-body" cx="55" cy="88" rx="44" ry="40" fill="#111" stroke="#1a1a1a" stroke-width="1"/>
+        <ellipse cx="55" cy="88" rx="37" ry="33" fill="#0d0d0d"/>
+        <!-- cap -->
+        <rect x="47" y="46" width="16" height="12" rx="3" fill="#1a1a1a"/>
+        <!-- rivets -->
+        <circle cx="32" cy="78" r="3" fill="#1a1a1a"/>
+        <circle cx="28" cy="92" r="2" fill="#1a1a1a"/>
+        <circle cx="78" cy="82" r="3" fill="#1a1a1a"/>
+        <!-- mini display on bomb -->
+        <rect x="35" y="80" width="40" height="18" rx="2" fill="#060606" stroke="#1c1c1c" stroke-width="0.5"/>
+        <text id="bomb-mini-timer" x="55" y="93" text-anchor="middle" font-family="'Share Tech Mono', monospace" font-size="11" fill="#ff2d2d">10:00</text>
+      </svg>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-track" id="progress-track"></div>
+
+    <!-- Hint -->
+    <div class="hint-line" id="hint-line">Aguardando o <span>1º número</span></div>
+
+    <!-- Input -->
+    <div class="input-panel">
+      <input type="text" id="code-input" placeholder="_ _ _ _ _" autocomplete="off" inputmode="decimal" autofocus />
+      <button id="confirm-btn">▶ Confirmar Código</button>
+      <div id="status-msg"></div>
+      <div id="attempts-msg"></div>
+    </div>
+
+  </div>
+
+  <!-- Defused screen -->
+  <div class="end-screen" id="defused-screen">
+    <span class="end-icon">🟢</span>
+    <div class="end-title safe">BOMBA DESARMADA</div>
+    <div class="end-sub">
+      Sequência completa inserida com sucesso.<br>
+      Todos os 7 códigos verificados.
+    </div>
+    <button id="restart-btn">↺ Reiniciar</button>
+  </div>
+
+  <!-- Exploded screen -->
+  <div class="end-screen" id="exploded-screen">
+    <span class="end-icon">💥</span>
+    <div class="end-title boom">DETONAÇÃO</div>
+    <div class="end-sub" id="explode-reason">
+      Tempo esgotado.<br>
+      A bomba explodiu.
+    </div>
+    <button id="restart-btn2">↺ Reiniciar</button>
+  </div>
+
+</div>
+
+<script>
+const SEQUENCE = [6, 3, 0.77, 0.17, 1.6, 2.3, 4];
+const TOTAL_TIME = 600;
+const MAX_WRONG = 3;
+const ORDINALS = ['1º','2º','3º','4º','5º','6º','7º'];
+
+let step = 0, timeLeft = TOTAL_TIME, wrongCount = 0, timer = null, active = true;
+
+function fmt(s) {
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+function norm(v) {
+  return parseFloat(parseFloat(v).toFixed(4));
+}
+
+function buildDots() {
+  const t = document.getElementById('progress-track');
+  t.innerHTML = '';
+  for (let i = 0; i < SEQUENCE.length; i++) {
+    const d = document.createElement('div');
+    d.className = 'pdot' + (i < step ? ' done' : i === step ? ' active' : '');
+    d.textContent = i < step ? '✓' : (i+1);
+    t.appendChild(d);
+  }
+}
+
+function updateHint() {
+  document.getElementById('hint-line').innerHTML =
+    `Aguardando o <span>${ORDINALS[step]} número</span>`;
+}
+
+function setTimer(s) {
+  const t = fmt(s);
+  document.getElementById('timer').textContent = t;
+  document.getElementById('bomb-mini-timer').textContent = t;
+  const el = document.getElementById('timer');
+  el.classList.toggle('warning', s <= 60);
+}
+
+function startTimer() {
+  timer = setInterval(() => {
+    if (!active) return;
+    timeLeft--;
+    setTimer(timeLeft);
+    if (timeLeft <= 0) { clearInterval(timer); triggerExplosion('Tempo esgotado.<br>A bomba explodiu.'); }
+  }, 1000);
+}
+
+function triggerExplosion(reason) {
+  active = false;
+  clearInterval(timer);
+  document.body.classList.add('exploding');
+  document.getElementById('fuse-spark').style.display = 'none';
+  setTimeout(() => {
+    document.getElementById('game-area').style.display = 'none';
+    document.getElementById('explode-reason').innerHTML = reason;
+    document.getElementById('exploded-screen').classList.add('show');
+    setLeds('boom');
+  }, 400);
+}
+
+function triggerDefuse() {
+  active = false;
+  clearInterval(timer);
+  document.getElementById('game-area').style.display = 'none';
+  document.getElementById('defused-screen').classList.add('show');
+  document.getElementById('device').classList.add('defused');
+  setLeds('safe');
+}
+
+function setLeds(mode) {
+  ['led1','led2','led3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'led ' + (mode === 'safe' ? 'safe' : '');
+  });
+}
+
+function submitCode() {
+  if (!active) return;
+  const raw = document.getElementById('code-input').value.trim().replace(',','.');
+  const inp = document.getElementById('code-input');
+  const msg = document.getElementById('status-msg');
+  const att = document.getElementById('attempts-msg');
+
+  if (!raw) return;
+
+  const val = norm(raw);
+  const exp = norm(SEQUENCE[step]);
+
+  if (val === exp) {
+    inp.className = 'ok';
+    msg.style.color = '#00ff88';
+    msg.textContent = '✓ CÓDIGO ACEITO — FIOS CORTADOS';
+    att.textContent = '';
+    wrongCount = 0;
+    step++;
+    setTimeout(() => {
+      inp.value = ''; inp.className = '';
+      msg.textContent = ''; att.textContent = '';
+      if (step >= SEQUENCE.length) { triggerDefuse(); }
+      else { buildDots(); updateHint(); }
+    }, 800);
+  } else {
+    wrongCount++;
+    inp.className = 'error';
+    msg.style.color = '#ff2d2d';
+    const rem = MAX_WRONG - wrongCount;
+    if (wrongCount >= MAX_WRONG) {
+      msg.textContent = '✗ CÓDIGO REJEITADO — REINICIANDO';
+      att.textContent = '— penalidade: -60 segundos —';
+      timeLeft = Math.max(timeLeft - 60, 1);
+      setTimer(timeLeft);
+      step = 0; wrongCount = 0;
+      setTimeout(() => {
+        inp.value = ''; inp.className = '';
+        msg.textContent = ''; att.textContent = '';
+        buildDots(); updateHint();
+      }, 1300);
+    } else {
+      msg.textContent = '✗ CÓDIGO INCORRETO';
+      att.textContent = `${rem} tentativa${rem>1?'s':''} restante${rem>1?'s':''} neste estágio`;
+      setTimeout(() => { inp.value = ''; inp.className = ''; }, 500);
+    }
+  }
+}
+
+function resetGame() {
+  step = 0; timeLeft = TOTAL_TIME; wrongCount = 0; active = true;
+  clearInterval(timer);
+  ['defused-screen','exploded-screen'].forEach(id => document.getElementById(id).classList.remove('show'));
+  document.getElementById('game-area').style.display = 'block';
+  document.getElementById('device').classList.remove('defused');
+  document.body.classList.remove('exploding');
+  document.getElementById('fuse-spark').style.display = '';
+  document.getElementById('code-input').value = '';
+  document.getElementById('code-input').className = '';
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('attempts-msg').textContent = '';
+  setLeds('active');
+  buildDots(); updateHint(); setTimer(timeLeft);
+  startTimer();
+}
+
+function setLeds(mode) {
+  ['led1','led2','led3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'led' + (mode === 'safe' ? ' safe' : mode === 'active' ? ' active' : '');
+  });
+}
+
+document.getElementById('confirm-btn').addEventListener('click', submitCode);
+document.getElementById('code-input').addEventListener('keydown', e => { if (e.key==='Enter') submitCode(); });
+document.getElementById('restart-btn').addEventListener('click', resetGame);
+document.getElementById('restart-btn2').addEventListener('click', resetGame);
+
+buildDots(); updateHint(); setTimer(timeLeft);
+startTimer();
+</script>
+</body>
+</html>
